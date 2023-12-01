@@ -2,8 +2,9 @@ const express = require("express"); //express import
 const bodyParser = require("body-parser");
 const app = express(); //app initialization
 const sqlite3 = require("sqlite3").verbose();
+require("./config/db");
 
-const Task = require("./models/task2Model");
+const { Task } = require("./models/task2Model");
 
 const dbName = "tasks.db";
 const port = 3000;
@@ -35,71 +36,77 @@ let tasks = [
 
 app.use(bodyParser.json());
 
-const checkExist = (task, res) => {
-	if (!task) {
-		return res.status(404).json({ error: "Завдання не знайдене" });
-	}
-};
-
-const serverError = (err, res) => {
-	if (err) {
-		return res.status(500).json({ error: err.message });
-	}
-};
-
 app.get("/", (req, res) => {
 	return res.send("Привіт, Expess!");
 });
 
-app.get("/tasks", (req, res) => {
-	db.all("SELECT * FROM tasks", (err, rows) => {
-		serverError(err, res);
-
-		return res.status(200).json(rows);
-	});
+app.get("/tasks", async (req, res) => {
+	try {
+		const tasks = await Task.find();
+		return res.status(200).json(tasks);
+	} catch (e) {
+		console.error("Task creation error", e);
+		return res.status(500).json({ error: e.message });
+	}
 }); // запит до БД, що повертає всі записи з нашими завданнями
 
-app.post("/tasks", (req, res) => {
-	const newTask = req.body; //отримаємо дані з тіла запиту
-
-	db.run("INSERT INTO tasks (text) VALUES (?)", [newTask.text], (err) => {
-		serverError(err, res);
-		// Відповідаємо повідомленням про успіх або новоствореною задачею(created - 201)
-
-		return res.status(201).json({ id: this.lastID });
-	});
+app.post("/tasks", async (req, res) => {
+	try {
+		const newTask = req.body; //отримаємо дані з тіла запиту
+		const task = await Task.create({
+			text: newTask.text,
+		});
+		if (!task) {
+			return res.status(404).json({ message: "Завдання не створене" });
+		}
+		return res.status(201).json(task);
+	} catch (e) {
+		console.error("Task creation error", e);
+		return res.status(500).json({ error: e.message });
+	}
 });
 
-app.get("/tasks/:id", (req, res) => {
-	const taskId = parseInt(req.params.id);
-	// знаходимо завдання за отриманим ідентифікатором
-	bd.get("SELECT * FROM tasks WHERE id = ?", taskId, (err, row) => {
-		serverError(err, res);
-		checkExist(row, res);
-
-		return res.status(200).json(row);
-	});
+app.get("/tasks/:id", async (req, res) => {
+	try {
+		const taskId = req.params.id;
+		const task = await Task.findById(taskId);
+		if (!task) {
+			return res.status(404).json({ message: "Завдання не знайдене" });
+		}
+		return res.status(200).json(task);
+	} catch (e) {
+		console.error("Task creation error", e);
+		return res.status(500).json({ error: e.message });
+	}
 });
 
-app.put("/tasks/:id", (req, res) => {
-	const { text } = req.body; // отримуємо дані з тіла запиту
-	const taskId = parseInt(req.params.id); // id параметр приходить у вигляді строки, трансформуємо в число
-
-	db.run("UPDATE tasks SET text = ? WHERE id = ?", [text, taskId], (err) => {
-		serverError(err, res);
-
-		return res.status(200).json({ id: taskId, text });
-	});
+app.put("/tasks/:id", async (req, res) => {
+	try {
+		const { text, isCompleted } = req.body; // отримуємо дані з тіла запиту
+		const taskId = req.params.id; // id параметр приходить у вигляді строки, трансформуємо в число
+		const task = await Task.findByIdAndUpdate(taskId, { text, isCompleted }, { new: true });
+		if (!task) {
+			return res.status(404).json({ message: "Завдання не знайдене" });
+		}
+		return res.status(200).json(task);
+	} catch (e) {
+		console.error("Task creation error", e);
+		return res.status(500).json({ error: e.message });
+	}
 });
 
-app.delete("/tasks/:id", (req, res) => {
-	const taskId = parseInt(req.params.id); // отримуємо id завданняж
-
-	db.run("DELETE from tasks WHERE id = ?", taskId, (err) => {
-		serverError(err, res);
-
+app.delete("/tasks/:id", async (req, res) => {
+	try {
+		const taskId = req.params.id; // отримуємо id завданняж
+		const task = await Task.findByIdAndDelete(taskId);
+		if (!task) {
+			return res.status(404).json({ message: "Завдання не знайдене" });
+		}
 		return res.status(204).send(); // відповісти повідомленням про успіх
-	});
+	} catch (e) {
+		console.error("Task creation error", e);
+		return res.status(500).json({ error: e.message });
+	}
 });
 
 app.listen(port, () => {
